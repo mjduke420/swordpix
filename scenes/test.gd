@@ -494,6 +494,40 @@ func _ready() -> void:
 	_check("elite affix sets elite flag", em.get("elite", "") != "")
 	_check("elite affix prefixes the name", em["name"] != "Orc")
 
+	# --- Lobby phase: blocks movement/combat-trigger until the adventure starts ---
+	var lb = GS.new()
+	lb.add_player(1, "Lobbier", "warrior")
+	lb.phase = "LOBBY"
+	_check("LOBBY blocks movement", not lb.move_player(1, 1, 0).get("success", true))
+	lb.spawn_monster_wave(1)
+	lb.players[1]["x"] = lb.monsters.values()[0]["x"]
+	lb.players[1]["y"] = lb.monsters.values()[0]["y"]
+	_check("LOBBY blocks combat engagement", not lb.check_combat_engagement(1))
+
+	# --- Late join: a player who connects mid-fight rolls into the running order ---
+	var lj = GS.new()
+	lj.add_player(1, "Alice", "warrior")
+	lj.add_player(2, "Bob", "mage")
+	lj.spawn_monster_wave(2)
+	var lj_mid: String = lj.monsters.keys()[0]
+	lj.players[1]["x"] = lj.monsters[lj_mid]["x"]
+	lj.players[1]["y"] = lj.monsters[lj_mid]["y"] + 1
+	lj.check_combat_engagement(1)
+	lj.roll_initiative(1)
+	lj.roll_initiative(2)
+	_check("setup: combat running before late join", lj.phase == "PLAYERS")
+	var before_turn = lj.current_turn_id
+	var before_size: int = lj.initiative_queue.size()
+	lj.add_player(3, "Charlie", "rogue")
+	lj.mark_late_join_pending(3)
+	_check("late joiner is marked awaiting a roll", lj._init_pending.has(3))
+	var lj_res: Dictionary = lj.roll_initiative(3)
+	_check("late joiner rolls into the fight", lj_res.get("success", false))
+	_check("late join doesn't disturb the active turn", lj.ids_equal(lj.current_turn_id, before_turn))
+	_check("late joiner is inserted into the order", lj.initiative_queue.size() == before_size + 1)
+	_check("late joiner no longer awaits a roll", not lj._init_pending.has(3))
+	_check("double-rolling a late joiner is rejected", not lj.roll_initiative(3).get("success", true))
+
 	# --- Music track resolution (swappable drop-in folder) ---
 	var mus = MUSIC.new()
 	_check("music maps the core states", mus.TRACKS.has("menu") and mus.TRACKS.has("explore") and mus.TRACKS.has("combat") and mus.TRACKS.has("boss"))

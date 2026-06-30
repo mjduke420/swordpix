@@ -384,6 +384,15 @@ func _render(state: Dictionary) -> void:
 		_show_combat_banner()
 	_last_phase = phase_now
 	_update_music(state, phase_now)
+
+	# Lobby: auto-open (and keep live-refreshed) a roster + Start button until the
+	# adventure begins; auto-close the moment phase moves on.
+	if phase_now == "LOBBY":
+		_overlay_mode = "lobby"
+		_overlay.visible = true
+		_refresh_overlay(state)
+	elif _overlay_mode == "lobby":
+		_close_overlay()
 	for c in _world.get_children():
 		c.queue_free()
 	var map: Array = state.get("map", [])
@@ -998,7 +1007,7 @@ func _tint_button(b: Button, color: String) -> void:
 ## Pick the background-music state from the game state and switch only on change
 ## (boss music when a boss is on the field mid-fight, combat otherwise, else explore).
 func _update_music(state: Dictionary, phase: String) -> void:
-	var want := "explore"
+	var want := "menu" if phase == "LOBBY" else "explore"
 	if phase == "PLAYERS" or phase == "INITIATIVE":
 		want = "combat"
 		for m in state.get("monsters", {}).values():
@@ -1018,16 +1027,19 @@ func _update_hud(state: Dictionary) -> void:
 	var exploration: bool = phase == "EXPLORATION"
 	var rolling: bool = phase == "INITIATIVE"
 	var cleared: bool = exploration and state.get("monsters", {}).is_empty()
-	var phase_label: String = "Combat" if combat else ("Roll Initiative" if rolling else "Exploration")
+	var phase_label: String = "Combat" if combat else ("Roll Initiative" if rolling else ("Lobby" if phase == "LOBBY" else "Exploration"))
 	_round_label.text = "Round %d  —  Region %d: %s  (%s)" % [state.get("round", 1), region, biome_name, phase_label]
 
-	# Roll Init only while initiative is open and you personally still owe a roll;
-	# combat actions only during combat; exploration actions only out of it.
-	var must_roll: bool = rolling and (Net.local_id in state.get("awaiting_init", []))
-	_btn_attack.visible = combat
-	_btn_ability.visible = combat
+	# Roll Init shows whenever the server says you personally still owe a roll —
+	# either the pre-combat INITIATIVE phase, or a late joiner pulled into a fight
+	# already in progress (phase PLAYERS). Attack/Ability/End Turn stay hidden for
+	# a late joiner until they've rolled in, so they can't act out of turn order.
+	var must_roll: bool = Net.local_id in state.get("awaiting_init", [])
+	var has_rolled_in: bool = not must_roll
+	_btn_attack.visible = combat and has_rolled_in
+	_btn_ability.visible = combat and has_rolled_in
 	_btn_roll.visible = must_roll
-	_btn_end.visible = combat
+	_btn_end.visible = combat and has_rolled_in
 	_btn_loot.visible = exploration
 	_btn_shop.visible = exploration
 	_btn_bash.visible = exploration
@@ -1053,6 +1065,9 @@ func _update_turn_bar(state: Dictionary) -> void:
 			var waiting: int = state.get("awaiting_init", []).size()
 			hint.text = "  Roll for initiative!  (%d still to roll)" % waiting
 			hint.modulate = Color("#fbbf24")
+		elif phase == "LOBBY":
+			hint.text = "  Gather your party, then Start the adventure"
+			hint.modulate = Color("#94a3b8")
 		else:
 			hint.text = "  Initiative order shows here during combat"
 			hint.modulate = Color("#64748b")
@@ -1258,6 +1273,8 @@ func _close_overlay() -> void:
 
 
 func _on_backdrop_input(event: InputEvent) -> void:
+	if _overlay_mode == "lobby":
+		return   # nothing to dismiss to — only Start closes the lobby
 	if event is InputEventMouseButton and event.pressed:
 		_close_overlay()
 
@@ -1284,6 +1301,31 @@ func _open_settings() -> void:
 	_overlay_mode = "settings"
 	_overlay.visible = true
 	_refresh_overlay(Net.last_state)
+
+
+## Lobby: roster of everyone connected so far + a Start button. Live-refreshed
+## on every state update (new joiners, chat) while phase is LOBBY — see _render.
+func _build_lobby(state: Dictionary) -> void:
+	_overlay_box.add_child(_heading("Lobby"))
+	var info := Label.new()
+	info.text = "Wait for friends to join, or start whenever you're ready — solo is fine too."
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.modulate = Color("#94a3b8")
+	_overlay_box.add_child(info)
+	_overlay_box.add_child(HSeparator.new())
+	var players: Dictionary = state.get("players", {})
+	for pid in players:
+		var p: Dictionary = players[pid]
+		var row := Label.new()
+		row.text = "%s  —  Lv %d %s" % [p.get("name", "?"), int(p.get("level", 1)), str(p.get("class", "?"))]
+		row.modulate = Color("#fbbf24") if pid == Net.local_id else Color("#e2e8f0")
+		_overlay_box.add_child(row)
+	_overlay_box.add_child(HSeparator.new())
+	var start := Button.new()
+	start.text = "Start Adventure" if players.size() > 1 else "Start Solo"
+	start.focus_mode = Control.FOCUS_NONE
+	start.pressed.connect(func(): Net.send_action({"type": "start_game"}))
+	_overlay_box.add_child(start)
 
 
 func _build_settings(_state: Dictionary) -> void:
@@ -1366,11 +1408,15 @@ func _refresh_overlay(state: Dictionary) -> void:
 	_overlay_backdrop.visible = true
 	for c in _overlay_box.get_children():
 		c.queue_free()
-	var close := Button.new()
-	close.text = "✕ Close"
-	close.pressed.connect(_close_overlay)
-	_overlay_box.add_child(close)
-	if _overlay_mode == "inv":
+	# The lobby isn't dismissible — there's nothing else to do until you start.
+	if _overlay_mode != "lobby":
+		var close := Button.new()
+		close.text = "✕ Close"
+		close.pressed.connect(_close_overlay)
+		_overlay_box.add_child(close)
+	if _overlay_mode == "lobby":
+		_build_lobby(state)
+	elif _overlay_mode == "inv":
 		_build_inventory(state)
 	elif _overlay_mode == "shop":
 		_build_shop(state)

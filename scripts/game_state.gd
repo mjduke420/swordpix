@@ -826,9 +826,12 @@ func begin_initiative() -> void:
 		_finalize_initiative()
 
 
-## A player rolls their d20 + DEX for initiative. Finalizes once everyone's in.
+## A player rolls their d20 + DEX for initiative — either before combat starts
+## (phase INITIATIVE, finalizes once everyone's in) or as a LATE JOINER inserting
+## into an already-running fight (phase PLAYERS; see mark_late_join_pending below).
+## A late roll slots into the sorted queue without disturbing whose turn it is.
 func roll_initiative(peer_id: int) -> Dictionary:
-	if phase != "INITIATIVE":
+	if phase != "INITIATIVE" and phase != "PLAYERS":
 		return {"success": false, "message": "It is not time to roll initiative."}
 	if not _init_pending.has(peer_id):
 		return {"success": false, "message": "You have already rolled."}
@@ -836,11 +839,22 @@ func roll_initiative(peer_id: int) -> Dictionary:
 	var raw := Dice.d20()
 	var mod: int = p["modifiers"].get("DEX", 0)
 	var total := raw + mod
+	var late_join: bool = phase == "PLAYERS"
+	var before = current_turn_id
 	initiative_queue.append({"id": peer_id, "type": "player", "roll": total, "name": p["name"]})
 	_init_pending.erase(peer_id)
-	var all_rolled: bool = _init_pending.is_empty()
-	if all_rolled:
-		_finalize_initiative()
+	var all_rolled: bool = false
+	if late_join:
+		initiative_queue.sort_custom(func(a, b): return a["roll"] > b["roll"])
+		if before != null:
+			for i in range(initiative_queue.size()):
+				if ids_equal(initiative_queue[i]["id"], before):
+					current_turn_index = i
+					break
+	else:
+		all_rolled = _init_pending.is_empty()
+		if all_rolled:
+			_finalize_initiative()
 	var sign_str := "+" if mod >= 0 else ""
 	return {
 		"success": true,
@@ -848,6 +862,15 @@ func roll_initiative(peer_id: int) -> Dictionary:
 		"dice": {"roll": raw, "mod": mod, "total": total, "name": p["name"], "kind": "initiative"},
 		"all_rolled": all_rolled,
 	}
+
+
+## Mark a freshly-joined player as owing an initiative roll when they connect
+## mid-fight (phase INITIATIVE or PLAYERS) — they show a Roll Init button and
+## roll_initiative() above inserts them into the running order. A no-op during
+## LOBBY/EXPLORATION, where joining just drops the player into the world.
+func mark_late_join_pending(peer_id: int) -> void:
+	if phase == "INITIATIVE" or phase == "PLAYERS":
+		_init_pending[peer_id] = true
 
 
 ## Sort the rolled queue and hand the first turn out — combat proper begins.

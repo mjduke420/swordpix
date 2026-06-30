@@ -83,6 +83,13 @@ Open the project in Godot 4.6+ and press Play, or run from the editor.
 1. Enter a name, pick a class.
 2. **Host Game** — you become the server and a player.
 3. On another machine/instance: enter the host's IP and **Join Game**.
+4. Everyone lands in the **Lobby** — a roster of who's connected plus a Start
+   button. Hit **Start Solo** to begin alone, or wait for friends and hit
+   **Start Adventure** once the group's ready; either way it's the same action.
+5. **Joining mid-fight is supported** — if someone connects while combat is
+   already underway, they're pulled into the running round: a Roll Init button
+   appears, and rolling slots them into the current initiative order without
+   disturbing whoever's turn it already is.
 
 ### Play in a browser (Docker)
 
@@ -123,7 +130,7 @@ the board.
 
 ## Verification
 
-`scenes/test.tscn` runs 127 headless assertions over the ported `GameState`
+`scenes/test.tscn` runs 135 headless assertions over the ported `GameState`
 (map gen, players/stats, monster waves, proximity combat, initiative, leveling,
 attack, ability, serialization, biome/region progression, bosses, NG+, chapter
 story, mixed-type id safety, line-of-sight, loot/equipment/chests/merchant,

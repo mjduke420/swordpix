@@ -41,18 +41,19 @@ func host_game(pname: String, class_key: String) -> bool:
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
 	gs = GameStateScript.new()
-	# The host is also a player.
+	gs.phase = "LOBBY"
+	# The host is also a player, waiting in the lobby like anyone else.
 	gs.add_player(local_id, pname, class_key)
-	_ensure_initial_wave()
 	_enter_once()
 	_broadcast_state()
 	return true
 
 
 ## Dedicated headless server: hosts the game WITHOUT the server being a player
-## (for Docker / browser play). Clients join purely as remote peers; the first
-## client's "join" action spawns the wave + first broadcast via _do_join — the
-## exact same authoritative path as a listen-server, minus a host player on peer 1.
+## (for Docker / browser play). Clients join purely as remote peers into the
+## lobby; whoever's there can start the run via the "start_game" action, alone
+## or with the group — the exact same authoritative path as a listen-server,
+## minus a host player on peer 1.
 func start_dedicated_server() -> bool:
 	var peer := WebSocketMultiplayerPeer.new()
 	var err := peer.create_server(PORT)
@@ -65,6 +66,7 @@ func start_dedicated_server() -> bool:
 	multiplayer.peer_connected.connect(func(pid): print("[server] peer %d connected" % pid))
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	gs = GameStateScript.new()
+	gs.phase = "LOBBY"
 	print("godot-rpg dedicated server listening on ws port %d" % PORT)
 	return true
 
@@ -148,6 +150,7 @@ func _handle_action(sender_id: int, action: Dictionary) -> void:
 		return
 	match action.get("type", ""):
 		"join": _do_join(sender_id, action)
+		"start_game": _do_start_game(sender_id)
 		"move": _do_move(sender_id, action)
 		"attack": _do_attack(sender_id)
 		"ability": _do_ability(sender_id)
@@ -181,8 +184,24 @@ func _do_join(sender_id: int, action: Dictionary) -> void:
 	if pname == "":
 		pname = "Adventurer"
 	gs.add_player(sender_id, pname, str(action.get("class", "warrior")))
+	# Joining mid-fight: pull them into the running combat round so they roll
+	# initiative and slot into the order, instead of standing around unable to act.
+	if gs.phase == "INITIATIVE" or gs.phase == "PLAYERS":
+		gs.mark_late_join_pending(sender_id)
+		_broadcast_log(gs.add_chat_message("System", "%s joins the fray! Roll for initiative!" % pname, "#fb923c"))
+	else:
+		_broadcast_log(gs.add_chat_message("System", "%s joined." % pname, "#aaaaaa"))
+	_broadcast_state()
+
+
+## Anyone in the lobby can start the run — solo, or with whoever else has joined.
+func _do_start_game(sender_id: int) -> void:
+	if gs.phase != "LOBBY":
+		_private_log(sender_id, "The adventure has already begun.")
+		return
+	gs.phase = "EXPLORATION"
 	_ensure_initial_wave()
-	_broadcast_log(gs.add_chat_message("System", "%s joined." % pname, "#aaaaaa"))
+	_broadcast_log(gs.add_chat_message("Storyteller", "The adventure begins!", "#c084fc"))
 	_broadcast_state()
 
 
