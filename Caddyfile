@@ -1,0 +1,27 @@
+# Caddy front door for godot-rpg.
+#   - Serves the exported web client from /srv.
+#   - Proxies /ws to the headless Godot server (WebSocket upgrade is automatic).
+#   - Sets the COOP/COEP headers Godot's web export needs for SharedArrayBuffer.
+#
+# SITE_ADDRESS controls the domain + TLS:
+#   - default "localhost"  -> Caddy's internal CA serves https://localhost
+#     (a secure context, so web threads work for local testing).
+#   - set to "rpg.example.com" -> automatic Let's Encrypt HTTPS for public play.
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# Cross-origin isolation: required for the web export's threads.
+	header {
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Resource-Policy "same-origin"
+	}
+
+	# Game server WebSocket. Upstream speaks plain ws on :8765; Caddy terminates
+	# TLS and forwards the Upgrade so the browser uses wss://HOST/ws.
+	reverse_proxy /ws server:8765
+
+	# Static web client.
+	root * /srv
+	file_server
+}
