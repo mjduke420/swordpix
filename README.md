@@ -29,7 +29,8 @@ The core loop is implemented and verified end-to-end:
 - **Monster AI** — chase + attack, Goblin Pocket Sand (blind), Orc Roar (frighten).
 - **Leveling** — XP per kill, +20 HP / +10 MP / +5 ATK per level (cap 10).
 - **Potions** — health & mana.
-- **HUD** — HP/MP/XP bars, level, action buttons, turn banner, combat log.
+- **HUD** — HP/MP/XP bars, level, action buttons (grouped into Combat / Explore /
+  Party clusters), turn banner, combat log.
 
 ### Phase 2 — World progression
 
@@ -40,6 +41,9 @@ The core loop is implemented and verified end-to-end:
   narration; biome is chosen by act + region.
 - **Region advance** — clear the area, then everyone presses **🏁 Next Region**
   (`ready`); when all players confirm, the world regenerates for the next region.
+- **Region recap** — the moment a wave is cleared, a per-player kills / damage
+  dealt / damage taken table pops up automatically, so the party sees how the
+  fight went before pressing on.
 - **3 bosses** — Goblin King (region 5), Lich of the Abyss (10), Void Herald (15),
   scaled and rendered larger with a tinted boss sprite. Each is a multi-phase
   fight: crossing **75% / 50% / 25% HP** triggers an escalating wave of **themed
@@ -130,7 +134,7 @@ the board.
 
 ## Verification
 
-`scenes/test.tscn` runs 135 headless assertions over the ported `GameState`
+`scenes/test.tscn` runs 141 headless assertions over the ported `GameState`
 (map gen, players/stats, monster waves, proximity combat, initiative, leveling,
 attack, ability, serialization, biome/region progression, bosses, NG+, chapter
 story, mixed-type id safety, line-of-sight, loot/equipment/chests/merchant,

@@ -72,6 +72,7 @@ var _overlay: PanelContainer       # inventory / shop overlay
 var _overlay_box: VBoxContainer
 var _overlay_backdrop: ColorRect
 var _stats_pid := -1
+var _recap_data := {}      # end-of-region kill/damage snapshot, see _on_recap
 var _dice_layer: CanvasLayer        # transient animated dice (above the HUD)
 
 # Conditional action buttons (toggled by phase / cleared state).
@@ -110,6 +111,7 @@ func _ready() -> void:
 	Net.log_message.connect(_on_log)
 	Net.vfx.connect(_on_vfx)
 	Net.dice_rolled.connect(_on_dice)
+	Net.recap.connect(_on_recap)
 	if not Net.last_state.is_empty():
 		_render(Net.last_state)
 
@@ -293,19 +295,19 @@ func _build_side_panel(parent: Control) -> void:
 
 	# (Local player stats live in the left Party list now — no duplicate panel.)
 
-	# Action buttons (2-column grid). Combat actions and Next Region are toggled
-	# in _update_hud based on phase / whether the area is cleared.
-	_action_row = GridContainer.new()
-	_action_row.columns = 2
-	col.add_child(_action_row)
+	# Action buttons, grouped by function into separate 2-column grids (Combat /
+	# Explore / Party) instead of one long flat list. Combat actions and Next
+	# Region are toggled in _update_hud based on phase / whether the area is cleared.
+	_add_group(col, "Combat")
 	_btn_attack = _add_action("Attack", {"type": "attack"}, "#fb923c")
 	_btn_ability = _add_action("Ability", {"type": "ability"}, "#c084fc")
 	_add_action("Heal", {"type": "heal"}, "#f87171")
 	_add_action("Mana", {"type": "mana"}, "#60a5fa")
 	_btn_roll = _add_action("Roll Init", {"type": "roll_initiative"}, "#fbbf24")
+	_btn_end = _add_button("End Turn", func(): Net.send_action({"type": "end_turn"}), "#cbd5e1")
+
+	_add_group(col, "Explore")
 	_btn_next = _add_action("Next Region", {"type": "ready"}, "#4ade80")
-	_add_button("Inv", _toggle_inventory, "#d8b98a")
-	_add_button("Guild", _toggle_guild, "#a5b4fc")
 	_btn_loot = _add_button("Loot", _do_loot, "#fcd34d")
 	_btn_shop = _add_button("Shop", _toggle_shop, "#34d399")
 	_btn_bash = _add_button("Bash", func(): Net.send_action({"type": "bash"}), "#f59e0b")
@@ -313,11 +315,14 @@ func _build_side_panel(parent: Control) -> void:
 	_btn_pray = _add_button("Pray", func(): Net.send_action({"type": "pray"}), "#fde68a")
 	_btn_hide = _add_button("Hide", func(): Net.send_action({"type": "hide"}), "#94a3b8")
 	_btn_examine = _add_button("Examine", func(): Net.send_action({"type": "examine"}), "#67e8f9")
-	_btn_end = _add_button("End Turn", func(): Net.send_action({"type": "end_turn"}), "#cbd5e1")
-	_btn_qa = _add_button("QA", _toggle_qa, "#e879f9")
-	_btn_nuke = _add_button("Nuke", func(): Net.send_action({"type": "qa_nuke"}), "#f87171")
+
+	_add_group(col, "Party")
+	_add_button("Inv", _toggle_inventory, "#d8b98a")
+	_add_button("Guild", _toggle_guild, "#a5b4fc")
 	_btn_boon = _add_button("Boon", _open_boon, "#facc15")
 	_add_button("Settings", _open_settings, "#cbd5e1")
+	_btn_qa = _add_button("QA", _toggle_qa, "#e879f9")
+	_btn_nuke = _add_button("Nuke", func(): Net.send_action({"type": "qa_nuke"}), "#f87171")
 
 	# Chat / log box (fills remaining height) — gold outline like the buttons.
 	var chat := PanelContainer.new()
@@ -969,6 +974,20 @@ func _show_combat_banner() -> void:
 	tw.tween_callback(banner.queue_free)
 
 
+## Small caption + a fresh 2-column grid — clusters the buttons added after it
+## (via _add_button/_add_action) into a labeled functional group instead of one
+## long flat list. Re-points _action_row, so call this before each group's buttons.
+func _add_group(parent: Control, title: String) -> void:
+	var lbl := Label.new()
+	lbl.text = title
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.modulate = Color("#a3873f")
+	parent.add_child(lbl)
+	_action_row = GridContainer.new()
+	_action_row.columns = 2
+	parent.add_child(_action_row)
+
+
 func _add_button(text: String, cb: Callable, color := "") -> Button:
 	var b := Button.new()
 	b.text = text
@@ -1303,6 +1322,15 @@ func _open_settings() -> void:
 	_refresh_overlay(Net.last_state)
 
 
+## Auto-opens the moment a region's wave is cleared (see net.gd _check_wave_cleared
+## -> push_recap.rpc) so everyone sees their kills / damage before moving on.
+func _on_recap(data: Dictionary) -> void:
+	_recap_data = data
+	_overlay_mode = "recap"
+	_overlay.visible = true
+	_refresh_overlay(Net.last_state)
+
+
 ## Lobby: roster of everyone connected so far + a Start button. Live-refreshed
 ## on every state update (new joiners, chat) while phase is LOBBY — see _render.
 func _build_lobby(state: Dictionary) -> void:
@@ -1326,6 +1354,43 @@ func _build_lobby(state: Dictionary) -> void:
 	start.focus_mode = Control.FOCUS_NONE
 	start.pressed.connect(func(): Net.send_action({"type": "start_game"}))
 	_overlay_box.add_child(start)
+
+
+func _build_recap_overlay(_state: Dictionary) -> void:
+	var d: Dictionary = _recap_data
+	_overlay_box.add_child(_heading("Region %d Cleared — %s" % [int(d.get("region", 1)), str(d.get("biome", ""))]))
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	_overlay_box.add_child(header)
+	for h in ["Player", "Kills", "Dmg Dealt", "Dmg Taken"]:
+		var hl := Label.new()
+		hl.text = h
+		hl.custom_minimum_size = Vector2(90, 0)
+		hl.modulate = Color("#94a3b8")
+		header.add_child(hl)
+	for row in d.get("players", []):
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 10)
+		_overlay_box.add_child(r)
+		var name_l := Label.new()
+		name_l.text = str(row.get("name", "?"))
+		name_l.custom_minimum_size = Vector2(90, 0)
+		name_l.modulate = Color("#fbbf24") if row.get("id") == Net.local_id else Color("#e2e8f0")
+		r.add_child(name_l)
+		var kl := Label.new()
+		kl.text = str(int(row.get("kills", 0)))
+		kl.custom_minimum_size = Vector2(90, 0)
+		r.add_child(kl)
+		var dl := Label.new()
+		dl.text = str(int(row.get("dmg_dealt", 0)))
+		dl.modulate = Color("#fb923c")
+		dl.custom_minimum_size = Vector2(90, 0)
+		r.add_child(dl)
+		var tl := Label.new()
+		tl.text = str(int(row.get("dmg_taken", 0)))
+		tl.modulate = Color("#f87171")
+		tl.custom_minimum_size = Vector2(90, 0)
+		r.add_child(tl)
 
 
 func _build_settings(_state: Dictionary) -> void:
@@ -1426,6 +1491,8 @@ func _refresh_overlay(state: Dictionary) -> void:
 		_build_player_stats(state)
 	elif _overlay_mode == "boon":
 		_build_boon_overlay(state)
+	elif _overlay_mode == "recap":
+		_build_recap_overlay(state)
 	elif _overlay_mode == "settings":
 		_build_settings(state)
 

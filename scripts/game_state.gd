@@ -426,6 +426,9 @@ func add_player(peer_id: int, pname: String, class_key: String) -> void:
 				"moves_left": 5, "action_used": false, "bonus_action_used": false,
 				"ended_turn": false, "is_hidden": false, "facing_left": false,
 				"status_effects": [], "stats": {}, "modifiers": {},
+				# Per-region combat tally for the end-of-region recap; reset in
+				# advance_region() so each region's numbers start fresh.
+				"region_kills": 0, "region_dmg_dealt": 0, "region_dmg_taken": 0,
 			}
 			# Assign standard array by class stat priority.
 			var priority: Array = cc["stat_priority"]
@@ -541,6 +544,7 @@ func _apply_tile_effects(p: Dictionary, evs: Array) -> void:
 				evs.append({"text": "%s nimbly dodges a pitfall!" % p["name"], "color": "#4ade80"})
 			else:
 				p["health"] -= 20
+				p["region_dmg_taken"] += 20
 				p["x"] = MAP_WIDTH / 2
 				p["y"] = MAP_HEIGHT / 2
 				if p["health"] <= 0:
@@ -968,6 +972,7 @@ func player_attack(peer_id: int) -> Dictionary:
 		damage *= 2
 	damage = int(damage * _guild_damage_multiplier(peer_id))   # guild bonus
 	m["hp"] -= damage
+	p["region_dmg_dealt"] += damage
 	var is_dead: bool = m["hp"] <= 0
 	var fx_type := "slash"
 	if p["class"] == "Mage":
@@ -978,6 +983,7 @@ func player_attack(peer_id: int) -> Dictionary:
 	var msg := "%s%s rolls %d+%d vs AC %d: HIT! deals %d dmg!" % [crit_text, p["name"], roll, dice_info["mod"], m["ac"], damage]
 	if is_dead:
 		msg += " %s is slain!" % m["name"]
+		p["region_kills"] += 1
 		grant_xp(p, 20 + region_number * 5)
 		_drop_loot(m["x"], m["y"])
 		monsters.erase(target_id)
@@ -1083,8 +1089,10 @@ func _nearest_monster(px: int, py: int, max_range: float):
 func _damage_monster(p: Dictionary, mid: String, dmg: int, parts: Array, fmt := "%s takes %d") -> void:
 	var m: Dictionary = monsters[mid]
 	m["hp"] -= dmg
+	p["region_dmg_dealt"] += dmg
 	parts.append(fmt % [m["name"], dmg])
 	if m["hp"] <= 0:
+		p["region_kills"] += 1
 		grant_xp(p, 20 + region_number * 5)
 		_drop_loot(m["x"], m["y"])
 		monsters.erase(mid)
@@ -1369,6 +1377,7 @@ func _perform_monster_attack(m: Dictionary, target: Dictionary, p_ac: int, logs:
 	if hit:
 		var damage: int = max(5, m["attack_damage"] + randi_range(-5, 5))
 		target["health"] -= damage
+		target["region_dmg_taken"] += damage
 		var elite: String = m.get("elite", "")
 		if elite == "Vampiric":
 			m["hp"] = min(m["max_hp"], m["hp"] + int(damage / 2))
@@ -1400,6 +1409,7 @@ func _boss_turn(m: Dictionary, target: Dictionary, logs: Array) -> void:
 			if Vector2(pl["x"], pl["y"]).distance_to(Vector2(m["x"], m["y"])) <= 2.5:
 				var dmg: int = m["attack_damage"]
 				pl["health"] -= dmg
+				pl["region_dmg_taken"] += dmg
 				logs.append({"text": "%s cleaves! %s takes %d dmg!" % [m["name"], pl["name"], dmg], "color": "#ef4444", "effect": {"type": "whirlwind", "x": pl["x"], "y": pl["y"], "amount": dmg}})
 				if pl["health"] <= 0:
 					pl["health"] = pl["max_health"]
@@ -1498,6 +1508,22 @@ func generate_chapter_story() -> String:
 ## Advance to the next region (or loop to NG+ after region 15). Regenerates the
 ## map for the act-appropriate biome and spawns a fresh wave. Returns dramatic
 ## transition text. (game_state.py:1626)
+## Snapshot of this region's combat performance per player (kills, damage dealt,
+## damage taken), captured at wave-clear time for the end-of-region recap screen —
+## before advance_region() resets the counters for the next region's fight.
+func region_recap() -> Dictionary:
+	var rows: Array = []
+	for pid in players:
+		var p: Dictionary = players[pid]
+		rows.append({
+			"id": pid, "name": p["name"],
+			"kills": p.get("region_kills", 0),
+			"dmg_dealt": p.get("region_dmg_dealt", 0),
+			"dmg_taken": p.get("region_dmg_taken", 0),
+		})
+	return {"region": region_number, "biome": current_biome, "players": rows}
+
+
 func advance_region() -> String:
 	var old_region := region_number
 	var dramatic := ""
@@ -1541,6 +1567,10 @@ func advance_region() -> String:
 	npcs = {}
 	torches = {}
 	traps = {}
+	for pid in players:
+		players[pid]["region_kills"] = 0
+		players[pid]["region_dmg_dealt"] = 0
+		players[pid]["region_dmg_taken"] = 0
 	_reposition_players()
 	spawn_monster_wave(randi_range(3, 5))
 	spawn_chests(randi_range(1, 3))
@@ -1992,6 +2022,7 @@ func _hazard_event(text: String, color: String, vfx_type: String, x: int, y: int
 ## Apply environmental damage; revive at map centre on defeat (like combat death).
 func _env_damage(p: Dictionary, amount: int) -> void:
 	p["health"] -= amount
+	p["region_dmg_taken"] += amount
 	if p["health"] <= 0:
 		p["health"] = p["max_health"]
 		p["x"] = MAP_WIDTH / 2

@@ -9,6 +9,7 @@ signal state_updated(state: Dictionary)   # any client got a fresh snapshot
 signal log_message(msg: Dictionary)        # {author, text, color}
 signal dice_rolled(dice: Dictionary)
 signal vfx(effect: Dictionary)             # combat effect to play (slash, fireball, ...)
+signal recap(data: Dictionary)             # end-of-region kill/damage recap
 signal entered_game                        # local peer is in and has first state
 signal connection_failed
 signal server_disconnected
@@ -415,6 +416,7 @@ func _check_wave_cleared() -> void:
 	if gs.monsters.is_empty() and gs.phase == "PLAYERS":
 		gs.phase = "EXPLORATION"
 		gs.first_combat_cleared = true
+		push_recap.rpc(gs.region_recap())
 		_broadcast_log(gs.add_chat_message("Storyteller", "All enemies are defeated! The path forward is open.", "#c084fc"))
 		_broadcast_state()
 
@@ -467,6 +469,11 @@ func push_dice(dice: Dictionary) -> void:
 @rpc("authority", "call_local", "reliable")
 func push_vfx(effect: Dictionary) -> void:
 	vfx.emit(effect)
+
+
+@rpc("authority", "call_local", "reliable")
+func push_recap(data: Dictionary) -> void:
+	recap.emit(data)
 
 
 func _enter_once() -> void:

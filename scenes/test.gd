@@ -528,6 +528,35 @@ func _ready() -> void:
 	_check("late joiner no longer awaits a roll", not lj._init_pending.has(3))
 	_check("double-rolling a late joiner is rejected", not lj.roll_initiative(3).get("success", true))
 
+	# --- Region recap: kill/damage tally captured for the end-of-region screen ---
+	var rc = GS.new()
+	rc.add_player(1, "Slayer", "warrior")
+	rc.spawn_monster_wave(1)
+	var rc_mid: String = rc.monsters.keys()[0]
+	rc.monsters[rc_mid]["ac"] = 0
+	rc.players[1]["x"] = rc.monsters[rc_mid]["x"]
+	rc.players[1]["y"] = rc.monsters[rc_mid]["y"] + 1
+	rc.check_combat_engagement(1)
+	rc.roll_initiative(1)
+	var rc_killed := false
+	for _i in range(12):
+		if rc_killed:
+			break
+		rc.current_turn_id = 1
+		rc.players[1]["action_used"] = false
+		rc.player_attack(1)
+		rc_killed = not rc.monsters.has(rc_mid)
+	_check("region_recap: kill is tallied", rc_killed and rc.players[1]["region_kills"] >= 1)
+	_check("region_recap: damage dealt is tallied", rc.players[1]["region_dmg_dealt"] > 0)
+	rc.players[1]["health"] = rc.players[1]["max_health"]
+	rc._env_damage(rc.players[1], 12)
+	_check("region_recap: damage taken is tallied", rc.players[1]["region_dmg_taken"] == 12)
+	var recap: Dictionary = rc.region_recap()
+	var rrow: Dictionary = recap["players"][0]
+	_check("region_recap reports the per-player tally", rrow["kills"] == rc.players[1]["region_kills"] and rrow["dmg_taken"] == 12)
+	rc.advance_region()
+	_check("advance_region resets the tally", rc.players[1]["region_kills"] == 0 and rc.players[1]["region_dmg_dealt"] == 0 and rc.players[1]["region_dmg_taken"] == 0)
+
 	# --- Music track resolution (swappable drop-in folder) ---
 	var mus = MUSIC.new()
 	_check("music maps the core states", mus.TRACKS.has("menu") and mus.TRACKS.has("explore") and mus.TRACKS.has("combat") and mus.TRACKS.has("boss"))
