@@ -95,9 +95,10 @@ WEB_PORT=9000 docker compose up --build  # or pick any port -> http://localhost:
 ```
 
 The transport is WebSocket, so the same authoritative server code runs unchanged;
-the browser client auto-connects to `ws://<host>:<port>/ws`. It's served over plain
-HTTP on a configurable port (`WEB_PORT`, default 8765) — front it with your own TLS
-proxy if you want HTTPS. See **[DOCKER.md](DOCKER.md)**.
+the browser client auto-connects to `ws(s)://<host>/ws`. The container serves plain
+HTTP on a configurable port (`WEB_PORT`, default 8765), but **Godot web requires a
+secure context** — so remote players need HTTPS in front (a Cloudflare Tunnel or your
+own TLS proxy); `localhost` works directly for local testing. See **[DOCKER.md](DOCKER.md)**.
 
 ## Architecture
 

@@ -23,6 +23,10 @@ client, so it takes a while; later builds are cached. Then open:
 Pick a name + class and hit **Play** — the client auto-connects to
 `ws://localhost:8765/ws`. Open a second browser/tab to join as a second player.
 
+`localhost` works because it is a **secure context**. Remote players cannot use a
+plain `http://<ip>:port` address — Godot's web export refuses to run outside a
+secure context (see **HTTPS** below).
+
 ## Choosing the port
 
 The published port defaults to **8765**. Override it with `WEB_PORT`:
@@ -34,13 +38,27 @@ WEB_PORT=9000 docker compose up --build      # -> http://HOST:9000
 The client derives its WebSocket URL from the page address, so it always targets
 the right host + port automatically — nothing else to configure.
 
-## HTTPS (optional)
+## HTTPS (required for remote players)
 
-The web client is exported **single-threaded**, so it runs fine over plain HTTP on
-any port — no TLS or secure-context required. If you want HTTPS, front the published
-port with your own reverse proxy or tunnel (Caddy/nginx/Traefik, Cloudflare Tunnel,
-or a PaaS that terminates TLS). The browser will see `https://`, and the client
-auto-upgrades its socket to `wss://` to match.
+Godot's web export only runs in a **secure context** — `https://` or `localhost`.
+It will not start over a plain `http://<ip>:port` URL (you'll see
+*"Secure Context — Check web server configuration (use HTTPS)"*). Exporting
+single-threaded removes the COOP/COEP/SharedArrayBuffer requirement, but **not** the
+secure-context requirement.
+
+So for anyone other than someone on the host machine, put HTTPS in front of the
+published port. The container stays plain HTTP; the proxy/tunnel terminates TLS:
+
+- **Cloudflare Tunnel** (no port-forwarding, trusted cert): point an ingress
+  hostname at `http://<host>:8765`. Players open the tunnel's `https://` URL; the
+  client auto-connects over `wss://<tunnel-host>/ws`. WebSockets pass through by
+  default.
+- **Your own reverse proxy** (Caddy/nginx/Traefik with a real domain), or a PaaS
+  that terminates TLS — same idea: forward the hostname (path `/`, incl. `/ws`) to
+  the container's published port.
+
+In every case the browser sees `https://`, and the client auto-upgrades its socket
+to `wss://` to match — no code or rebuild needed.
 
 ## How it works
 
@@ -56,6 +74,11 @@ The same authoritative `game_state.gd` / `net.gd` code runs as before — only t
 
 ## Troubleshooting
 
+- **"Secure Context — Check web server configuration (use HTTPS)"** — you opened the
+  game over a plain `http://<ip>:port` URL. Use `https://` (a tunnel/proxy) or
+  `localhost`. See **HTTPS** above.
+- **`SSL_ERROR_RX_RECORD_TOO_LONG`** — the opposite: the browser tried `https://`
+  against the plain-HTTP port directly. Reach it through your HTTPS tunnel/proxy URL.
 - **Can't connect / WebSocket errors** — check `docker compose logs server` for the
   "dedicated server listening on ws port 8765" line and `[server] peer N connected`
   messages; confirm you're hitting the same `WEB_PORT` you published.
