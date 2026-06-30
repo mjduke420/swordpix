@@ -124,7 +124,7 @@ func _build_ui() -> void:
 		_class_picker.add_item("%s — %s" % [cc["name"], cc["description"]])
 	form.add_child(_class_picker)
 
-	var host_btn := _make_button("⚔️  Host Game", _on_host)
+	var host_btn := _make_button("Host Game", _on_host)
 	form.add_child(host_btn)
 	var host_sep := HSeparator.new()
 	form.add_child(host_sep)
@@ -132,7 +132,7 @@ func _build_ui() -> void:
 	form.add_child(ip_label)
 	_ip_edit = _make_edit("127.0.0.1")
 	form.add_child(_ip_edit)
-	var join_btn := _make_button("🛡️  Join Game", _on_join)
+	var join_btn := _make_button("Join Game", _on_join)
 	form.add_child(join_btn)
 	form.add_child(HSeparator.new())
 
@@ -143,7 +143,7 @@ func _build_ui() -> void:
 		host_sep.visible = false
 		ip_label.visible = false
 		_ip_edit.visible = false
-		join_btn.text = "🛡️  Play"
+		join_btn.text = "Play"
 	form.add_child(_labeled("Audio"))
 	form.add_child(Settings.build_panel())
 

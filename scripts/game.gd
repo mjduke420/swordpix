@@ -23,12 +23,12 @@ const PARTY_WIDTH := 210                      # fixed width of the left party co
 
 # VFX particle tint per combat-effect / hazard type.
 const BOONS := [
-	{"id": "vitality", "name": "🛡️ Vitality", "desc": "+25 max HP"},
-	{"id": "power", "name": "⚔️ Power", "desc": "+6 attack damage"},
-	{"id": "precision", "name": "🎯 Precision", "desc": "+2 DEX, +1 AC"},
-	{"id": "arcane", "name": "🔮 Arcane", "desc": "+25 max MP"},
-	{"id": "bulwark", "name": "🧱 Bulwark", "desc": "+2 Armor Class"},
-	{"id": "ferocity", "name": "🔥 Ferocity", "desc": "+1 STR & +1 CON"},
+	{"id": "vitality", "name": "Vitality", "desc": "+25 max HP"},
+	{"id": "power", "name": "Power", "desc": "+6 attack damage"},
+	{"id": "precision", "name": "Precision", "desc": "+2 DEX, +1 AC"},
+	{"id": "arcane", "name": "Arcane", "desc": "+25 max MP"},
+	{"id": "bulwark", "name": "Bulwark", "desc": "+2 Armor Class"},
+	{"id": "ferocity", "name": "Ferocity", "desc": "+1 STR & +1 CON"},
 ]
 const VFX_COLORS := {
 	"slash": Color("#e2e8f0"), "fireball": Color("#f97316"), "frost": Color("#38bdf8"),
@@ -298,26 +298,26 @@ func _build_side_panel(parent: Control) -> void:
 	_action_row = GridContainer.new()
 	_action_row.columns = 2
 	col.add_child(_action_row)
-	_btn_attack = _add_action("⚔️ Attack", {"type": "attack"})
-	_btn_ability = _add_action("✨ Ability", {"type": "ability"})
-	_add_action("❤️ Heal", {"type": "heal"})
-	_add_action("🔷 Mana", {"type": "mana"})
-	_btn_roll = _add_action("🎲 Roll Init", {"type": "roll_initiative"})
-	_btn_next = _add_action("🏁 Next Region", {"type": "ready"})
-	_add_button("🎒 Inv", _toggle_inventory)
-	_add_button("🛡️ Guild", _toggle_guild)
-	_btn_loot = _add_button("📦 Loot", _do_loot)
-	_btn_shop = _add_button("🛒 Shop", _toggle_shop)
-	_btn_bash = _add_button("🔨 Bash", func(): Net.send_action({"type": "bash"}))
-	_btn_pick = _add_button("🗝️ Pick", func(): Net.send_action({"type": "pick"}))
-	_btn_pray = _add_button("🙏 Pray", func(): Net.send_action({"type": "pray"}))
-	_btn_hide = _add_button("🥷 Hide", func(): Net.send_action({"type": "hide"}))
-	_btn_examine = _add_button("🔍 Examine", func(): Net.send_action({"type": "examine"}))
-	_btn_end = _add_button("⏳ End Turn", func(): Net.send_action({"type": "end_turn"}))
-	_btn_qa = _add_button("🧪 QA", _toggle_qa)
-	_btn_nuke = _add_button("☢️ Nuke", func(): Net.send_action({"type": "qa_nuke"}))
-	_btn_boon = _add_button("⭐ Boon", _open_boon)
-	_add_button("⚙ Settings", _open_settings)
+	_btn_attack = _add_action("Attack", {"type": "attack"}, "#fb923c")
+	_btn_ability = _add_action("Ability", {"type": "ability"}, "#c084fc")
+	_add_action("Heal", {"type": "heal"}, "#f87171")
+	_add_action("Mana", {"type": "mana"}, "#60a5fa")
+	_btn_roll = _add_action("Roll Init", {"type": "roll_initiative"}, "#fbbf24")
+	_btn_next = _add_action("Next Region", {"type": "ready"}, "#4ade80")
+	_add_button("Inv", _toggle_inventory, "#d8b98a")
+	_add_button("Guild", _toggle_guild, "#a5b4fc")
+	_btn_loot = _add_button("Loot", _do_loot, "#fcd34d")
+	_btn_shop = _add_button("Shop", _toggle_shop, "#34d399")
+	_btn_bash = _add_button("Bash", func(): Net.send_action({"type": "bash"}), "#f59e0b")
+	_btn_pick = _add_button("Pick", func(): Net.send_action({"type": "pick"}), "#2dd4bf")
+	_btn_pray = _add_button("Pray", func(): Net.send_action({"type": "pray"}), "#fde68a")
+	_btn_hide = _add_button("Hide", func(): Net.send_action({"type": "hide"}), "#94a3b8")
+	_btn_examine = _add_button("Examine", func(): Net.send_action({"type": "examine"}), "#67e8f9")
+	_btn_end = _add_button("End Turn", func(): Net.send_action({"type": "end_turn"}), "#cbd5e1")
+	_btn_qa = _add_button("QA", _toggle_qa, "#e879f9")
+	_btn_nuke = _add_button("Nuke", func(): Net.send_action({"type": "qa_nuke"}), "#f87171")
+	_btn_boon = _add_button("Boon", _open_boon, "#facc15")
+	_add_button("Settings", _open_settings, "#cbd5e1")
 
 	# Chat / log box (fills remaining height) — gold outline like the buttons.
 	var chat := PanelContainer.new()
@@ -960,26 +960,39 @@ func _show_combat_banner() -> void:
 	tw.tween_callback(banner.queue_free)
 
 
-func _add_button(text: String, cb: Callable) -> Button:
+func _add_button(text: String, cb: Callable, color := "") -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE   # don't let WASD (ui_*) navigate buttons
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_button(b)
+	_tint_button(b, color)
 	b.pressed.connect(cb)
 	_action_row.add_child(b)
 	return b
 
 
-func _add_action(text: String, action: Dictionary) -> Button:
+func _add_action(text: String, action: Dictionary, color := "") -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE   # don't let WASD (ui_*) navigate buttons
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_button(b)
+	_tint_button(b, color)
 	b.pressed.connect(func(): Net.send_action(action))
 	_action_row.add_child(b)
 	return b
+
+
+## Override a button's text color to signal its function (heal=red, mana=blue, …).
+func _tint_button(b: Button, color: String) -> void:
+	if color == "":
+		return
+	var c := Color(color)
+	b.add_theme_color_override("font_color", c)
+	b.add_theme_color_override("font_hover_color", c.lightened(0.3))
+	b.add_theme_color_override("font_pressed_color", c.darkened(0.1))
+	b.add_theme_color_override("font_focus_color", c)
 
 
 ## Pick the background-music state from the game state and switch only on change
@@ -1006,7 +1019,7 @@ func _update_hud(state: Dictionary) -> void:
 	var rolling: bool = phase == "INITIATIVE"
 	var cleared: bool = exploration and state.get("monsters", {}).is_empty()
 	var phase_label: String = "Combat" if combat else ("Roll Initiative" if rolling else "Exploration")
-	_round_label.text = "🔊 Round %d  —  Region %d: %s  (%s)" % [state.get("round", 1), region, biome_name, phase_label]
+	_round_label.text = "Round %d  —  Region %d: %s  (%s)" % [state.get("round", 1), region, biome_name, phase_label]
 
 	# Roll Init only while initiative is open and you personally still owe a roll;
 	# combat actions only during combat; exploration actions only out of it.
@@ -1038,7 +1051,7 @@ func _update_turn_bar(state: Dictionary) -> void:
 		var hint := Label.new()
 		if phase == "INITIATIVE":
 			var waiting: int = state.get("awaiting_init", []).size()
-			hint.text = "  🎲 Roll for initiative!  (%d still to roll)" % waiting
+			hint.text = "  Roll for initiative!  (%d still to roll)" % waiting
 			hint.modulate = Color("#fbbf24")
 		else:
 			hint.text = "  Initiative order shows here during combat"
@@ -1052,7 +1065,7 @@ func _update_turn_bar(state: Dictionary) -> void:
 		var is_player: bool = entry.get("type", "") == "player"
 		var lbl := Label.new()
 		var nm := _short_name(str(entry.get("name", "?")))
-		lbl.text = ("▶ " + nm) if is_current else nm
+		lbl.text = ("> " + nm) if is_current else nm
 		lbl.add_theme_font_size_override("font_size", 13)
 		if is_current:
 			lbl.modulate = Color("#fbbf24")
@@ -1128,14 +1141,14 @@ func _update_party_card(pid, p: Dictionary, ct, guild_name: String) -> void:
 	var is_local: bool = pid == Net.local_id
 	var is_turn: bool = typeof(ct) == typeof(pid) and ct == pid
 	var name_lbl: Label = refs["name"]
-	name_lbl.text = "%s%s" % ["▶ " if is_turn else "", p.get("name", "?")]
+	name_lbl.text = "%s%s" % ["> " if is_turn else "", p.get("name", "?")]
 	if is_turn:
 		name_lbl.modulate = Color("#fbbf24")
 	elif is_local:
 		name_lbl.modulate = Color("#ffd24a")
 	else:
 		name_lbl.modulate = Color("#e2e8f0")
-	var tag := "  🛡️%s" % guild_name if guild_name != "" else ""
+	var tag := "  <%s>" % guild_name if guild_name != "" else ""
 	refs["sub"].text = "Lv %d %s%s" % [p.get("level", 1), p.get("class", ""), tag]
 	refs["status"].text = _status_badges(p)
 
@@ -1496,9 +1509,26 @@ func _build_guild(state: Dictionary) -> void:
 
 func _heading(text: String) -> Label:
 	var l := Label.new()
-	l.text = text
+	l.text = _strip_icons(text)
 	l.add_theme_font_size_override("font_size", 16)
 	return l
+
+
+## Drop emoji / symbol glyphs the web export's font can't render (shown as boxes):
+## arrows + misc symbols + dingbats + geometric (0x2190-0x2BFF), the emoji planes
+## (>=0x1F000), and the variation-selector / ZWJ joiners.
+func _strip_icons(s: String) -> String:
+	var out := ""
+	for ch in s:
+		var c := ch.unicode_at(0)
+		if c == 0xFE0F or c == 0x200D:
+			continue
+		if c >= 0x2190 and c <= 0x2BFF:
+			continue
+		if c >= 0x1F000:
+			continue
+		out += ch
+	return out.replace("  ", " ")
 
 
 func _item_label(item: Dictionary) -> String:
@@ -1531,7 +1561,7 @@ func _on_chat_submitted(text: String) -> void:
 
 func _on_log(msg: Dictionary) -> void:
 	var l := Label.new()
-	l.text = "[%s] %s" % [msg.get("author", ""), msg.get("text", "")]
+	l.text = _strip_icons("[%s] %s" % [msg.get("author", ""), msg.get("text", "")])
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(290, 0)
 	l.modulate = Color(msg.get("color", "#ffffff"))
