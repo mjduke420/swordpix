@@ -1,6 +1,6 @@
-# godot-rpg: headless game server + Caddy-served web client.
-# Local test:  docker compose up --build         (open https://localhost)
-# Public:      SITE_ADDRESS=rpg.example.com docker compose up --build -d
+# godot-rpg: headless game server + Caddy-served web client (plain HTTP).
+# Run:          docker compose up --build                  -> http://localhost:8765
+# Custom port:  WEB_PORT=9000 docker compose up --build    -> http://localhost:9000
 services:
   server:
     build:
@@ -18,15 +18,5 @@ services:
     depends_on:
       - server
     ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      # Domain for Caddy + automatic HTTPS. Defaults to localhost for local play.
-      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
-    volumes:
-      - caddy_data:/data      # persists issued TLS certificates
-      - caddy_config:/config
-
-volumes:
-  caddy_data:
-  caddy_config:
+      # Published host port -> Caddy (container :80). Override with WEB_PORT.
+      - "${WEB_PORT:-8765}:80"

@@ -5,11 +5,11 @@ Run the whole game as two containers — a **headless Godot dedicated server** a
 Godot install required for players.
 
 ```
-Browser (Godot Web export)  ──wss://HOST/ws──►  Caddy  ──ws──►  Godot server (:8765)
-                            ◄── https (web client + COOP/COEP headers) ──┘
+Browser (Godot Web export)  ──ws://HOST:PORT/ws──►  Caddy  ──►  Godot server (:8765)
+                            ◄── http (web client) ──┘
 ```
 
-## Quick start (local)
+## Quick start
 
 ```bash
 docker compose up --build
@@ -18,51 +18,47 @@ docker compose up --build
 First build downloads Godot 4.7 + the web export templates (~1 GB) and exports the
 client, so it takes a while; later builds are cached. Then open:
 
-> **https://localhost**
+> **http://localhost:8765**
 
-Caddy serves `localhost` over HTTPS via its built-in CA (your browser may warn the
-first time — accept it). HTTPS matters: Godot's web export uses threads, which need
-a secure context (`https` or `localhost`) plus the COOP/COEP headers Caddy sets.
+Pick a name + class and hit **Play** — the client auto-connects to
+`ws://localhost:8765/ws`. Open a second browser/tab to join as a second player.
 
-Pick a name + class and hit **Play** — the client auto-connects to `wss://localhost/ws`.
-Open a second browser/tab to join as a second player.
+## Choosing the port
 
-## Public deployment
-
-Point a domain's DNS at the host, open ports 80/443, then:
+The published port defaults to **8765**. Override it with `WEB_PORT`:
 
 ```bash
-SITE_ADDRESS=rpg.example.com docker compose up --build -d
+WEB_PORT=9000 docker compose up --build      # -> http://HOST:9000
 ```
 
-Caddy obtains a Let's Encrypt certificate automatically and serves
-`https://rpg.example.com`; the client connects over `wss://rpg.example.com/ws`.
+The client derives its WebSocket URL from the page address, so it always targets
+the right host + port automatically — nothing else to configure.
+
+## HTTPS (optional)
+
+The web client is exported **single-threaded**, so it runs fine over plain HTTP on
+any port — no TLS or secure-context required. If you want HTTPS, front the published
+port with your own reverse proxy or tunnel (Caddy/nginx/Traefik, Cloudflare Tunnel,
+or a PaaS that terminates TLS). The browser will see `https://`, and the client
+auto-upgrades its socket to `wss://` to match.
 
 ## How it works
 
 | Piece | Where | Notes |
 |-------|-------|-------|
 | Dedicated server | `Dockerfile` target `server` | `godot --headless --audio-driver Dummy --path /game -- --server` → `main.gd` calls `Net.start_dedicated_server()`. The server is **not** a player; the first client to join spawns the wave. |
-| Web client | `Dockerfile` target `build` → `web` | Exported with the `Web` preset (threads on), served by Caddy from `/srv`. |
-| Reverse proxy / TLS | `Caddyfile` | Auto-HTTPS, COOP/COEP headers, `/ws` → `server:8765` WebSocket upgrade. |
+| Web client | `Dockerfile` target `build` → `web` | Exported with the `Web` preset (threads off), served by Caddy from `/srv`. |
+| Reverse proxy | `Caddyfile` | Plain HTTP on container `:80`; `/ws` → `server:8765` WebSocket upgrade. |
+| Published port | `docker-compose.yml` | `${WEB_PORT:-8765}` → web container `:80`. |
 
 The same authoritative `game_state.gd` / `net.gd` code runs as before — only the
 *hosting* changed. Desktop builds can still **Host Game** / **Join Game** natively.
 
-## Configuration
-
-- `SITE_ADDRESS` (compose env) — domain for Caddy + automatic HTTPS. Defaults to
-  `localhost`.
-- Game port `8765` is internal only (reached via Caddy's `/ws`); change it in
-  `scripts/net.gd` (`PORT`) and `Caddyfile` together if needed.
-
 ## Troubleshooting
 
-- **"SharedArrayBuffer is not defined" / blank canvas** — you opened the client over
-  plain `http://<ip>`. Use the HTTPS URL (or `localhost`); threads need a secure
-  context. (Alternatively re-export the `Web` preset with Thread Support off.)
 - **Can't connect / WebSocket errors** — check `docker compose logs server` for the
-  "dedicated server listening on ws port 8765" line and the `[server] peer N
-  connected` messages; confirm the page is same-origin with `/ws`.
-- **Server container exits** — if Godot complains about missing libs, add them to the
-  `server` stage in `Dockerfile` (start with `libfontconfig1`, already included).
+  "dedicated server listening on ws port 8765" line and `[server] peer N connected`
+  messages; confirm you're hitting the same `WEB_PORT` you published.
+- **Server container exits** — if Godot complains about a missing lib, add it to the
+  `server` stage in `Dockerfile` (starts with `libfontconfig1`).
+- **Port already in use** — pick another with `WEB_PORT=<n>`.

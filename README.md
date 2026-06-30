@@ -90,12 +90,14 @@ You can also host the game in Docker and let players join from a **web browser**
 with no Godot install — a headless dedicated server plus a Caddy-served web export:
 
 ```bash
-docker compose up --build   # then open https://localhost
+docker compose up --build               # then open http://localhost:8765
+WEB_PORT=9000 docker compose up --build  # or pick any port -> http://localhost:9000
 ```
 
 The transport is WebSocket, so the same authoritative server code runs unchanged;
-the browser client auto-connects to `wss://<host>/ws`. Public hosting is a one-line
-`SITE_ADDRESS=your.domain` change (automatic HTTPS). See **[DOCKER.md](DOCKER.md)**.
+the browser client auto-connects to `ws://<host>:<port>/ws`. It's served over plain
+HTTP on a configurable port (`WEB_PORT`, default 8765) — front it with your own TLS
+proxy if you want HTTPS. See **[DOCKER.md](DOCKER.md)**.
 
 ## Architecture
 

@@ -10,3 +10,8 @@ dist/
 Thumbs.db
 *.log
 *.tmp
+
+# Local dev tooling (not part of the game / deploy).
+addon.py
+opencode.json
+OPENCODE_TASKS.md
