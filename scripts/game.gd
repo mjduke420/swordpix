@@ -194,14 +194,19 @@ void fragment() {
 
 ## Effect archetypes for _make_btn_material's `mode`, chosen to fit each button's
 ## function — keep in sync with the `mode` branches in the shader above.
-const MODE_SWEEP := 0    # neutral utility (Inv, Guild, Settings, End Turn...)
-const MODE_PULSE := 1    # restorative / holy (Heal, Pray)
-const MODE_SPARKLE := 2  # luck / treasure (Roll Init, Loot, Boon)
-const MODE_SLASH := 3    # impact / violence (Attack, Bash, Nuke)
-const MODE_SHIMMER := 4  # flow / finesse (Mana, Shop)
-const MODE_FLICKER := 5  # stealth / glitch (Hide, QA)
-const MODE_SCAN := 6     # inspection / search (Pick, Examine)
-const MODE_ARCANE := 7   # magic (Ability)
+## Most buttons opted out of the shader (too flashy) and are just a static tinted
+## color + the plain gold outline; MODE_NONE (the _add_button/_add_action default)
+## skips shader assignment entirely. Only Heal (MODE_PULSE) and Mana (MODE_SHIMMER)
+## keep an animated sheen. MODE_SWEEP still backs the party roster cards' shine.
+const MODE_NONE := -1    # no shader — static color, plain outline (most buttons)
+const MODE_SWEEP := 0    # neutral drift (party roster cards)
+const MODE_PULSE := 1    # restorative / holy (Heal)
+const MODE_SPARKLE := 2  # luck / treasure
+const MODE_SLASH := 3    # impact / violence
+const MODE_SHIMMER := 4  # flow / finesse (Mana)
+const MODE_FLICKER := 5  # stealth / glitch
+const MODE_SCAN := 6     # inspection / search
+const MODE_ARCANE := 7   # magic
 
 
 func _make_btn_material(tint_hex: String, mode: int) -> ShaderMaterial:
@@ -230,7 +235,8 @@ func _style_button(b: Button) -> void:
 	b.add_theme_color_override("font_color", Color("#e8d8a0"))
 	b.add_theme_color_override("font_hover_color", Color("#fff3c0"))
 	b.custom_minimum_size = Vector2(0, 34)
-	b.material = _btn_mat
+	# No shader by default — most buttons are a static color + the plain gold
+	# outline; only a couple (Heal/Mana) opt into an animated sheen, see MODE_NONE.
 
 
 func _preload_textures() -> void:
@@ -366,30 +372,30 @@ func _build_side_panel(parent: Control) -> void:
 	# Explore / Party) instead of one long flat list. Combat actions and Next
 	# Region are toggled in _update_hud based on phase / whether the area is cleared.
 	_add_group(col, "Combat")
-	_btn_attack = _add_action("Attack", {"type": "attack"}, "#fb923c", MODE_SLASH)
-	_btn_ability = _add_action("Ability", {"type": "ability"}, "#c084fc", MODE_ARCANE)
+	_btn_attack = _add_action("Attack", {"type": "attack"}, "#fb923c")
+	_btn_ability = _add_action("Ability", {"type": "ability"}, "#c084fc")
 	_add_action("Heal", {"type": "heal"}, "#f87171", MODE_PULSE)
 	_add_action("Mana", {"type": "mana"}, "#60a5fa", MODE_SHIMMER)
-	_btn_roll = _add_action("Roll Init", {"type": "roll_initiative"}, "#fbbf24", MODE_SPARKLE)
-	_btn_end = _add_button("End Turn", func(): Net.send_action({"type": "end_turn"}), "#cbd5e1", MODE_SWEEP)
+	_btn_roll = _add_action("Roll Init", {"type": "roll_initiative"}, "#fbbf24")
+	_btn_end = _add_button("End Turn", func(): Net.send_action({"type": "end_turn"}), "#cbd5e1")
 
 	_add_group(col, "Explore")
-	_btn_next = _add_action("Next Region", {"type": "ready"}, "#4ade80", MODE_SWEEP)
-	_btn_loot = _add_button("Loot", _do_loot, "#fcd34d", MODE_SPARKLE)
-	_btn_shop = _add_button("Shop", _toggle_shop, "#34d399", MODE_SHIMMER)
-	_btn_bash = _add_button("Bash", func(): Net.send_action({"type": "bash"}), "#f59e0b", MODE_SLASH)
-	_btn_pick = _add_button("Pick", func(): Net.send_action({"type": "pick"}), "#2dd4bf", MODE_SCAN)
-	_btn_pray = _add_button("Pray", func(): Net.send_action({"type": "pray"}), "#fde68a", MODE_PULSE)
-	_btn_hide = _add_button("Hide", func(): Net.send_action({"type": "hide"}), "#94a3b8", MODE_FLICKER)
-	_btn_examine = _add_button("Examine", func(): Net.send_action({"type": "examine"}), "#67e8f9", MODE_SCAN)
+	_btn_next = _add_action("Next Region", {"type": "ready"}, "#4ade80")
+	_btn_loot = _add_button("Loot", _do_loot, "#fcd34d")
+	_btn_shop = _add_button("Shop", _toggle_shop, "#34d399")
+	_btn_bash = _add_button("Bash", func(): Net.send_action({"type": "bash"}), "#f59e0b")
+	_btn_pick = _add_button("Pick", func(): Net.send_action({"type": "pick"}), "#2dd4bf")
+	_btn_pray = _add_button("Pray", func(): Net.send_action({"type": "pray"}), "#fde68a")
+	_btn_hide = _add_button("Hide", func(): Net.send_action({"type": "hide"}), "#94a3b8")
+	_btn_examine = _add_button("Examine", func(): Net.send_action({"type": "examine"}), "#67e8f9")
 
 	_add_group(col, "Party")
-	_add_button("Inv", _toggle_inventory, "#d8b98a", MODE_SWEEP)
-	_add_button("Guild", _toggle_guild, "#a5b4fc", MODE_SWEEP)
-	_btn_boon = _add_button("Boon", _open_boon, "#facc15", MODE_SPARKLE)
-	_add_button("Settings", _open_settings, "#cbd5e1", MODE_SWEEP)
-	_btn_qa = _add_button("QA", _toggle_qa, "#e879f9", MODE_FLICKER)
-	_btn_nuke = _add_button("Nuke", func(): Net.send_action({"type": "qa_nuke"}), "#f87171", MODE_SLASH)
+	_add_button("Inv", _toggle_inventory, "#d8b98a")
+	_add_button("Guild", _toggle_guild, "#a5b4fc")
+	_btn_boon = _add_button("Boon", _open_boon, "#facc15")
+	_add_button("Settings", _open_settings, "#cbd5e1")
+	_btn_qa = _add_button("QA", _toggle_qa, "#e879f9")
+	_btn_nuke = _add_button("Nuke", func(): Net.send_action({"type": "qa_nuke"}), "#f87171")
 
 	# Chat / log box (fills remaining height) — gold outline like the buttons.
 	var chat := PanelContainer.new()
@@ -1055,7 +1061,7 @@ func _add_group(parent: Control, title: String) -> void:
 	parent.add_child(_action_row)
 
 
-func _add_button(text: String, cb: Callable, color := "", mode: int = MODE_SWEEP) -> Button:
+func _add_button(text: String, cb: Callable, color := "", mode: int = MODE_NONE) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE   # don't let WASD (ui_*) navigate buttons
@@ -1067,7 +1073,7 @@ func _add_button(text: String, cb: Callable, color := "", mode: int = MODE_SWEEP
 	return b
 
 
-func _add_action(text: String, action: Dictionary, color := "", mode: int = MODE_SWEEP) -> Button:
+func _add_action(text: String, action: Dictionary, color := "", mode: int = MODE_NONE) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE   # don't let WASD (ui_*) navigate buttons
@@ -1082,7 +1088,7 @@ func _add_action(text: String, action: Dictionary, color := "", mode: int = MODE
 ## Override a button's text color to signal its function (heal=red, mana=blue, …)
 ## and swap its shader sheen to match — tinted the same color, running an effect
 ## that fits the function (see MODE_* consts / _make_button_assets).
-func _tint_button(b: Button, color: String, mode: int = MODE_SWEEP) -> void:
+func _tint_button(b: Button, color: String, mode: int = MODE_NONE) -> void:
 	if color == "":
 		return
 	var c := Color(color)
@@ -1090,7 +1096,8 @@ func _tint_button(b: Button, color: String, mode: int = MODE_SWEEP) -> void:
 	b.add_theme_color_override("font_hover_color", c.lightened(0.3))
 	b.add_theme_color_override("font_pressed_color", c.darkened(0.1))
 	b.add_theme_color_override("font_focus_color", c)
-	b.material = _make_btn_material(color, mode)
+	if mode != MODE_NONE:
+		b.material = _make_btn_material(color, mode)
 
 
 ## Pick the background-music state from the game state and switch only on change
