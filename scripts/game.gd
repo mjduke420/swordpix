@@ -93,8 +93,8 @@ var _btn_nuke: Button
 var _btn_boon: Button
 var _qa_mode := false
 
-# Button look: shared D&D-styled styleboxes + a golden sheen shader.
-var _btn_mat: ShaderMaterial
+# Button look: shared D&D-styled styleboxes. Almost every button is a static
+# tinted color + the plain gold outline; only Heal/Mana keep an animated sheen.
 var _btn_shader: Shader
 var _sb_normal: StyleBoxFlat
 var _sb_hover: StyleBoxFlat
@@ -128,9 +128,9 @@ func _make_dot_texture() -> void:
 	_dot_tex = ImageTexture.create_from_image(img)
 
 
-## Shared button theme: dark panel + gold border. Each button also gets its own
-## ShaderMaterial (see _make_btn_material) tinted to its function's text color,
-## running one of several effects chosen to fit that function (see MODE_* below).
+## Shared button theme: dark panel + gold border. Every button is a static tinted
+## color on the plain outline, except Heal/Mana which keep an animated sheen via
+## _make_btn_material (see MODE_* below).
 func _make_button_assets() -> void:
 	_sb_normal = _make_sb("#241f1a", "#b8924a")
 	_sb_hover = _make_sb("#332b22", "#ffd86b")
@@ -140,73 +140,28 @@ func _make_button_assets() -> void:
 shader_type canvas_item;
 
 uniform vec3 tint : source_color = vec3(1.0, 0.85, 0.45);
-uniform int mode : hint_range(0, 7) = 0;
-
-// A cheap hash for sparkle/flicker — no texture lookup needed.
-float _hash(vec2 p) {
-	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-}
+uniform int mode : hint_range(0, 1) = 0;
 
 void fragment() {
 	float t = TIME;
-	vec3 add = vec3(0.0);
+	vec3 add;
 	if (mode == 0) {
-		// SWEEP: a diagonal band of light drifting across — neutral utility.
-		float s = sin((UV.x + UV.y) * 5.0 - t * 2.0) * 0.5 + 0.5;
-		add = tint * smoothstep(0.78, 1.0, s) * 0.22;
-	} else if (mode == 1) {
-		// PULSE: a slow, even breathing glow — restorative / holy.
+		// PULSE: a slow, even breathing glow — Heal.
 		add = tint * (sin(t * 2.2) * 0.5 + 0.5) * 0.16;
-	} else if (mode == 2) {
-		// SPARKLE: scattered glints flickering in and out — luck / treasure.
-		float n = _hash(floor(UV * 6.0) + floor(t * 3.0));
-		add = tint * step(0.965, n) * 0.9;
-	} else if (mode == 3) {
-		// SLASH: a fast, hard-edged diagonal streak — impact / violence.
-		float d = fract((UV.x + UV.y) - t * 1.3);
-		float s = smoothstep(0.0, 0.03, d) * (1.0 - smoothstep(0.03, 0.09, d));
-		add = tint * s * 0.9;
-	} else if (mode == 4) {
-		// SHIMMER: a soft horizontal wave rolling through — flow / finesse.
-		float s = pow(sin(UV.x * 10.0 - t * 3.0) * 0.5 + 0.5, 4.0);
-		add = tint * s * 0.20;
-	} else if (mode == 5) {
-		// FLICKER: dims instead of brightening — stealth / glitch.
-		float n = _hash(vec2(floor(t * 9.0)));
-		float flick = step(0.85, n);
-		COLOR.rgb *= 1.0 - flick * 0.4;
-		add = tint * flick * 0.3;
-	} else if (mode == 6) {
-		// SCAN: a slow horizontal scanning line — inspection / search.
-		float line = 1.0 - smoothstep(0.0, 0.02, abs(UV.x - fract(t * 0.35)));
-		add = tint * line * 0.5;
-	} else if (mode == 7) {
-		// ARCANE: a pulsing glow with a slow diagonal drift — magic.
-		float drift = sin((UV.x - UV.y) * 4.0 + t * 1.5) * 0.5 + 0.5;
-		float breathe = sin(t * 1.8) * 0.5 + 0.5;
-		add = tint * (drift * 0.5 + breathe * 0.5) * 0.18;
+	} else {
+		// SHIMMER: a soft horizontal wave rolling through — Mana.
+		add = tint * pow(sin(UV.x * 10.0 - t * 3.0) * 0.5 + 0.5, 4.0) * 0.20;
 	}
 	COLOR.rgb += add * COLOR.a;
 }
 """
-	_btn_mat = _make_btn_material("#ffd873", MODE_SWEEP)
 
 
-## Effect archetypes for _make_btn_material's `mode`, chosen to fit each button's
-## function — keep in sync with the `mode` branches in the shader above.
-## Most buttons opted out of the shader (too flashy) and are just a static tinted
-## color + the plain gold outline; MODE_NONE (the _add_button/_add_action default)
-## skips shader assignment entirely. Only Heal (MODE_PULSE) and Mana (MODE_SHIMMER)
-## keep an animated sheen. MODE_SWEEP still backs the party roster cards' shine.
-const MODE_NONE := -1    # no shader — static color, plain outline (most buttons)
-const MODE_SWEEP := 0    # neutral drift (party roster cards)
-const MODE_PULSE := 1    # restorative / holy (Heal)
-const MODE_SPARKLE := 2  # luck / treasure
-const MODE_SLASH := 3    # impact / violence
-const MODE_SHIMMER := 4  # flow / finesse (Mana)
-const MODE_FLICKER := 5  # stealth / glitch
-const MODE_SCAN := 6     # inspection / search
-const MODE_ARCANE := 7   # magic
+## MODE_NONE (the _add_button/_add_action default) skips shader assignment
+## entirely — a plain static tinted button. Heal/Mana are the only opt-ins.
+const MODE_NONE := -1
+const MODE_PULSE := 0    # restorative glow (Heal)
+const MODE_SHIMMER := 1  # flowing wave (Mana)
 
 
 func _make_btn_material(tint_hex: String, mode: int) -> ShaderMaterial:
@@ -1220,7 +1175,6 @@ func _update_party(state: Dictionary) -> void:
 func _build_party_card() -> Dictionary:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", _make_sb("#1d1813", "#5a4a2a"))
-	card.material = _btn_mat
 	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var cv := VBoxContainer.new()
 	cv.add_theme_constant_override("separation", 2)

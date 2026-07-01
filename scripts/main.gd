@@ -1,6 +1,6 @@
 extends Control
 ## Main menu — pixel-art logo, name/class entry, Host / Join. Builds its UI in
-## code with a styled card + animated backdrop; switches to game.tscn on entry.
+## code with a styled card + static vignette backdrop; switches to game.tscn on entry.
 
 const GAME_SCENE := "res://scenes/game.tscn"
 
@@ -8,7 +8,6 @@ var _name_edit: LineEdit
 var _ip_edit: LineEdit
 var _class_picker: OptionButton
 var _status: Label
-var _btn_mat: ShaderMaterial
 
 
 func _ready() -> void:
@@ -18,7 +17,6 @@ func _ready() -> void:
 		Net.start_dedicated_server()
 		return
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	_make_button_material()
 	_build_background()
 	_build_ui()
 	Net.entered_game.connect(_on_entered_game)
@@ -41,9 +39,8 @@ void fragment() {
 	vec2 c = UV - 0.5;
 	float d = length(c);
 	float vig = smoothstep(1.0, 0.15, d);
-	float pulse = 0.5 + 0.5 * sin(TIME * 0.4);
 	vec3 base = vec3(0.035, 0.045, 0.07);
-	vec3 glow = vec3(0.13, 0.10, 0.05) * vig * (0.55 + 0.45 * pulse);
+	vec3 glow = vec3(0.13, 0.10, 0.05) * vig;
 	COLOR = vec4(base + glow, 1.0);
 }
 """
@@ -51,20 +48,6 @@ void fragment() {
 	mat.shader = sh
 	bg.material = mat
 	add_child(bg)
-
-
-func _make_button_material() -> void:
-	var sh := Shader.new()
-	sh.code = """
-shader_type canvas_item;
-void fragment() {
-	float s = sin((UV.x + UV.y) * 5.0 - TIME * 2.0) * 0.5 + 0.5;
-	s = smoothstep(0.78, 1.0, s) * 0.20;
-	COLOR.rgb += vec3(1.0, 0.85, 0.45) * s * COLOR.a;
-}
-"""
-	_btn_mat = ShaderMaterial.new()
-	_btn_mat.shader = sh
 
 
 func _sb(bg: String, border: String, width := 2) -> StyleBoxFlat:
@@ -177,7 +160,6 @@ func _make_button(text: String, cb: Callable) -> Button:
 	b.add_theme_stylebox_override("pressed", _sb("#171310", "#caa84a"))
 	b.add_theme_color_override("font_color", Color("#e8d8a0"))
 	b.add_theme_color_override("font_hover_color", Color("#fff3c0"))
-	b.material = _btn_mat
 	b.pressed.connect(cb)
 	return b
 
