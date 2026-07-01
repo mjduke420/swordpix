@@ -95,6 +95,7 @@ var _qa_mode := false
 
 # Button look: shared D&D-styled styleboxes + a golden sheen shader.
 var _btn_mat: ShaderMaterial
+var _btn_shader: Shader
 var _sb_normal: StyleBoxFlat
 var _sb_hover: StyleBoxFlat
 var _sb_pressed: StyleBoxFlat
@@ -127,22 +128,88 @@ func _make_dot_texture() -> void:
 	_dot_tex = ImageTexture.create_from_image(img)
 
 
-## Shared button theme: dark panel + gold border + animated golden sheen shader.
+## Shared button theme: dark panel + gold border. Each button also gets its own
+## ShaderMaterial (see _make_btn_material) tinted to its function's text color,
+## running one of several effects chosen to fit that function (see MODE_* below).
 func _make_button_assets() -> void:
 	_sb_normal = _make_sb("#241f1a", "#b8924a")
 	_sb_hover = _make_sb("#332b22", "#ffd86b")
 	_sb_pressed = _make_sb("#171310", "#caa84a")
-	var sh := Shader.new()
-	sh.code = """
+	_btn_shader = Shader.new()
+	_btn_shader.code = """
 shader_type canvas_item;
+
+uniform vec3 tint : source_color = vec3(1.0, 0.85, 0.45);
+uniform int mode : hint_range(0, 7) = 0;
+
+// A cheap hash for sparkle/flicker — no texture lookup needed.
+float _hash(vec2 p) {
+	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
 void fragment() {
-	float s = sin((UV.x + UV.y) * 5.0 - TIME * 2.0) * 0.5 + 0.5;
-	s = smoothstep(0.78, 1.0, s) * 0.20;
-	COLOR.rgb += vec3(1.0, 0.85, 0.45) * s * COLOR.a;
+	float t = TIME;
+	vec3 add = vec3(0.0);
+	if (mode == 0) {
+		// SWEEP: a diagonal band of light drifting across — neutral utility.
+		float s = sin((UV.x + UV.y) * 5.0 - t * 2.0) * 0.5 + 0.5;
+		add = tint * smoothstep(0.78, 1.0, s) * 0.22;
+	} else if (mode == 1) {
+		// PULSE: a slow, even breathing glow — restorative / holy.
+		add = tint * (sin(t * 2.2) * 0.5 + 0.5) * 0.16;
+	} else if (mode == 2) {
+		// SPARKLE: scattered glints flickering in and out — luck / treasure.
+		float n = _hash(floor(UV * 6.0) + floor(t * 3.0));
+		add = tint * step(0.965, n) * 0.9;
+	} else if (mode == 3) {
+		// SLASH: a fast, hard-edged diagonal streak — impact / violence.
+		float d = fract((UV.x + UV.y) - t * 1.3);
+		float s = smoothstep(0.0, 0.03, d) * (1.0 - smoothstep(0.03, 0.09, d));
+		add = tint * s * 0.9;
+	} else if (mode == 4) {
+		// SHIMMER: a soft horizontal wave rolling through — flow / finesse.
+		float s = pow(sin(UV.x * 10.0 - t * 3.0) * 0.5 + 0.5, 4.0);
+		add = tint * s * 0.20;
+	} else if (mode == 5) {
+		// FLICKER: dims instead of brightening — stealth / glitch.
+		float n = _hash(vec2(floor(t * 9.0)));
+		float flick = step(0.85, n);
+		COLOR.rgb *= 1.0 - flick * 0.4;
+		add = tint * flick * 0.3;
+	} else if (mode == 6) {
+		// SCAN: a slow horizontal scanning line — inspection / search.
+		float line = 1.0 - smoothstep(0.0, 0.02, abs(UV.x - fract(t * 0.35)));
+		add = tint * line * 0.5;
+	} else if (mode == 7) {
+		// ARCANE: a pulsing glow with a slow diagonal drift — magic.
+		float drift = sin((UV.x - UV.y) * 4.0 + t * 1.5) * 0.5 + 0.5;
+		float breathe = sin(t * 1.8) * 0.5 + 0.5;
+		add = tint * (drift * 0.5 + breathe * 0.5) * 0.18;
+	}
+	COLOR.rgb += add * COLOR.a;
 }
 """
-	_btn_mat = ShaderMaterial.new()
-	_btn_mat.shader = sh
+	_btn_mat = _make_btn_material("#ffd873", MODE_SWEEP)
+
+
+## Effect archetypes for _make_btn_material's `mode`, chosen to fit each button's
+## function — keep in sync with the `mode` branches in the shader above.
+const MODE_SWEEP := 0    # neutral utility (Inv, Guild, Settings, End Turn...)
+const MODE_PULSE := 1    # restorative / holy (Heal, Pray)
+const MODE_SPARKLE := 2  # luck / treasure (Roll Init, Loot, Boon)
+const MODE_SLASH := 3    # impact / violence (Attack, Bash, Nuke)
+const MODE_SHIMMER := 4  # flow / finesse (Mana, Shop)
+const MODE_FLICKER := 5  # stealth / glitch (Hide, QA)
+const MODE_SCAN := 6     # inspection / search (Pick, Examine)
+const MODE_ARCANE := 7   # magic (Ability)
+
+
+func _make_btn_material(tint_hex: String, mode: int) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = _btn_shader
+	mat.set_shader_parameter("tint", Color(tint_hex))
+	mat.set_shader_parameter("mode", mode)
+	return mat
 
 
 func _make_sb(bg: String, border: String) -> StyleBoxFlat:
@@ -299,30 +366,30 @@ func _build_side_panel(parent: Control) -> void:
 	# Explore / Party) instead of one long flat list. Combat actions and Next
 	# Region are toggled in _update_hud based on phase / whether the area is cleared.
 	_add_group(col, "Combat")
-	_btn_attack = _add_action("Attack", {"type": "attack"}, "#fb923c")
-	_btn_ability = _add_action("Ability", {"type": "ability"}, "#c084fc")
-	_add_action("Heal", {"type": "heal"}, "#f87171")
-	_add_action("Mana", {"type": "mana"}, "#60a5fa")
-	_btn_roll = _add_action("Roll Init", {"type": "roll_initiative"}, "#fbbf24")
-	_btn_end = _add_button("End Turn", func(): Net.send_action({"type": "end_turn"}), "#cbd5e1")
+	_btn_attack = _add_action("Attack", {"type": "attack"}, "#fb923c", MODE_SLASH)
+	_btn_ability = _add_action("Ability", {"type": "ability"}, "#c084fc", MODE_ARCANE)
+	_add_action("Heal", {"type": "heal"}, "#f87171", MODE_PULSE)
+	_add_action("Mana", {"type": "mana"}, "#60a5fa", MODE_SHIMMER)
+	_btn_roll = _add_action("Roll Init", {"type": "roll_initiative"}, "#fbbf24", MODE_SPARKLE)
+	_btn_end = _add_button("End Turn", func(): Net.send_action({"type": "end_turn"}), "#cbd5e1", MODE_SWEEP)
 
 	_add_group(col, "Explore")
-	_btn_next = _add_action("Next Region", {"type": "ready"}, "#4ade80")
-	_btn_loot = _add_button("Loot", _do_loot, "#fcd34d")
-	_btn_shop = _add_button("Shop", _toggle_shop, "#34d399")
-	_btn_bash = _add_button("Bash", func(): Net.send_action({"type": "bash"}), "#f59e0b")
-	_btn_pick = _add_button("Pick", func(): Net.send_action({"type": "pick"}), "#2dd4bf")
-	_btn_pray = _add_button("Pray", func(): Net.send_action({"type": "pray"}), "#fde68a")
-	_btn_hide = _add_button("Hide", func(): Net.send_action({"type": "hide"}), "#94a3b8")
-	_btn_examine = _add_button("Examine", func(): Net.send_action({"type": "examine"}), "#67e8f9")
+	_btn_next = _add_action("Next Region", {"type": "ready"}, "#4ade80", MODE_SWEEP)
+	_btn_loot = _add_button("Loot", _do_loot, "#fcd34d", MODE_SPARKLE)
+	_btn_shop = _add_button("Shop", _toggle_shop, "#34d399", MODE_SHIMMER)
+	_btn_bash = _add_button("Bash", func(): Net.send_action({"type": "bash"}), "#f59e0b", MODE_SLASH)
+	_btn_pick = _add_button("Pick", func(): Net.send_action({"type": "pick"}), "#2dd4bf", MODE_SCAN)
+	_btn_pray = _add_button("Pray", func(): Net.send_action({"type": "pray"}), "#fde68a", MODE_PULSE)
+	_btn_hide = _add_button("Hide", func(): Net.send_action({"type": "hide"}), "#94a3b8", MODE_FLICKER)
+	_btn_examine = _add_button("Examine", func(): Net.send_action({"type": "examine"}), "#67e8f9", MODE_SCAN)
 
 	_add_group(col, "Party")
-	_add_button("Inv", _toggle_inventory, "#d8b98a")
-	_add_button("Guild", _toggle_guild, "#a5b4fc")
-	_btn_boon = _add_button("Boon", _open_boon, "#facc15")
-	_add_button("Settings", _open_settings, "#cbd5e1")
-	_btn_qa = _add_button("QA", _toggle_qa, "#e879f9")
-	_btn_nuke = _add_button("Nuke", func(): Net.send_action({"type": "qa_nuke"}), "#f87171")
+	_add_button("Inv", _toggle_inventory, "#d8b98a", MODE_SWEEP)
+	_add_button("Guild", _toggle_guild, "#a5b4fc", MODE_SWEEP)
+	_btn_boon = _add_button("Boon", _open_boon, "#facc15", MODE_SPARKLE)
+	_add_button("Settings", _open_settings, "#cbd5e1", MODE_SWEEP)
+	_btn_qa = _add_button("QA", _toggle_qa, "#e879f9", MODE_FLICKER)
+	_btn_nuke = _add_button("Nuke", func(): Net.send_action({"type": "qa_nuke"}), "#f87171", MODE_SLASH)
 
 	# Chat / log box (fills remaining height) — gold outline like the buttons.
 	var chat := PanelContainer.new()
@@ -988,32 +1055,34 @@ func _add_group(parent: Control, title: String) -> void:
 	parent.add_child(_action_row)
 
 
-func _add_button(text: String, cb: Callable, color := "") -> Button:
+func _add_button(text: String, cb: Callable, color := "", mode: int = MODE_SWEEP) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE   # don't let WASD (ui_*) navigate buttons
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_button(b)
-	_tint_button(b, color)
+	_tint_button(b, color, mode)
 	b.pressed.connect(cb)
 	_action_row.add_child(b)
 	return b
 
 
-func _add_action(text: String, action: Dictionary, color := "") -> Button:
+func _add_action(text: String, action: Dictionary, color := "", mode: int = MODE_SWEEP) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE   # don't let WASD (ui_*) navigate buttons
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_button(b)
-	_tint_button(b, color)
+	_tint_button(b, color, mode)
 	b.pressed.connect(func(): Net.send_action(action))
 	_action_row.add_child(b)
 	return b
 
 
-## Override a button's text color to signal its function (heal=red, mana=blue, …).
-func _tint_button(b: Button, color: String) -> void:
+## Override a button's text color to signal its function (heal=red, mana=blue, …)
+## and swap its shader sheen to match — tinted the same color, running an effect
+## that fits the function (see MODE_* consts / _make_button_assets).
+func _tint_button(b: Button, color: String, mode: int = MODE_SWEEP) -> void:
 	if color == "":
 		return
 	var c := Color(color)
@@ -1021,6 +1090,7 @@ func _tint_button(b: Button, color: String) -> void:
 	b.add_theme_color_override("font_hover_color", c.lightened(0.3))
 	b.add_theme_color_override("font_pressed_color", c.darkened(0.1))
 	b.add_theme_color_override("font_focus_color", c)
+	b.material = _make_btn_material(color, mode)
 
 
 ## Pick the background-music state from the game state and switch only on change

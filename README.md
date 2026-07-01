@@ -30,7 +30,8 @@ The core loop is implemented and verified end-to-end:
 - **Leveling** — XP per kill, +20 HP / +10 MP / +5 ATK per level (cap 10).
 - **Potions** — health & mana.
 - **HUD** — HP/MP/XP bars, level, action buttons (grouped into Combat / Explore /
-  Party clusters), turn banner, combat log.
+  Party clusters, each tinted to its function with a matching shader sheen —
+  Attack slashes, Heal pulses, Hide flickers, and so on), turn banner, combat log.
 
 ### Phase 2 — World progression
 
